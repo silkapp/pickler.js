@@ -18,6 +18,6 @@ crypt="java -jar \
    --externs=dist/externs.js \
    $plain"
 
-mkdir -p dist
+mkdir -p dist/out
 $build && $crypt > $min
 
