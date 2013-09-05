@@ -1,18 +1,23 @@
 #!/bin/bash
 
-mkdir -p dist
-fay \
+plain=dist/out/pickler.js
+min=dist/out/pickler.min.js
+
+build="fay \
   -O \
   --include=src \
-  -odist/pickler.js \
-  --html-wrapper \
+  -o$plain \
   --package=fay-text \
   --pretty \
-  src/Pickler.hs
+  --library \
+  src/Pickler.hs"
 
-java -jar \
-  $SILK/code/dev/closure/compiler.jar \
-  --compilation_level=ADVANCED_OPTIMIZATIONS \
-  dist/pickler.js > \
-  dist/pickler-crypted.js
+crypt="java -jar \
+   $SILK/code/dev/closure/compiler.jar \
+   --compilation_level=ADVANCED_OPTIMIZATIONS \
+   --externs=dist/externs.js \
+   $plain"
+
+mkdir -p dist
+$build && $crypt > $min
 
