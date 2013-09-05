@@ -1,4 +1,4 @@
-module Text where
+module Pickler.Text where
 
 import Prelude
 import Fay.Text (Text)

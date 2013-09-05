@@ -9,8 +9,8 @@ import Prelude hiding (any)
 import Fay.Text (Text, fromString)
 
 import Pickler
-import Object
-import Text
+import Pickler.Object
+import Pickler.Text
 
 data Fix f = In { out :: f (Fix f) }
 
@@ -22,9 +22,9 @@ type a :- b = (a, b)
 
 namedP :: Text `Pickler` Object (Text :- User :- [Text] :- ())
 namedP =
-  ( object "mode"       (tokenI "expLore")
-  . object "view"       userP
-  . object "collection" (prefix "collection" pRelations)
+  ( named "mode"       (tokenI "expLore")
+  . named "view"       userP
+  . named "collection" (prefix "collection" pRelations)
   $ pure emptyObj
   )
 

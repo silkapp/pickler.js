@@ -10,8 +10,8 @@ module Pickler where
 import Prelude hiding (any)
 import Fay.Text (Text, fromString)
 
-import Text
-import Object
+import Pickler.Text
+import Pickler.Object
 
 -------------------------------------------------------------------------------
 
@@ -26,11 +26,11 @@ showError :: Expect -> Text
 showError = join "\n" . go
   where
     go e = case e of
-            Prim  t -> [t]
-            And a b -> indent (go a) ++ ["and"] ++ indent (go b)
-            Or  a b -> indent (go a) ++ ["or" ] ++ indent (go b)
-            Many  a -> "many of" : indent (go a)
-            Some  a -> "some of" : indent (go a)
+             Prim  t -> [t]
+             And a b -> indent (go a) ++ ["and"] ++ indent (go b)
+             Or  a b -> indent (go a) ++ ["or" ] ++ indent (go b)
+             Many  a -> "many of" : indent (go a)
+             Some  a -> "some of" : indent (go a)
     indent = map ("  " <>)
 
 type Parser  i o = [i] -> Either Expect (o, [i])
@@ -105,6 +105,9 @@ infix  5 `prints`
         q = printAnd a $ \i -> const $
             Right i
         w = _label a
+
+fmap :: (b -> o) -> Point i j b -> Point i j o
+fmap = (<$>)
 
 (-<) :: (j -> o) -> Pickler i o -> Point i j o
 (-<) f (Pickler p q w) = Pickler p (q . f) w
