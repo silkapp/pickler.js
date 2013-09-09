@@ -10,6 +10,7 @@ build="fay \
   --package=fay-text \
   --pretty \
   --library \
+  --strict Pickler \
   src/Pickler.hs"
 
 crypt="java -jar \
