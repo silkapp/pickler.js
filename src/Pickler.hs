@@ -37,8 +37,8 @@ type Parser  i o = [i] -> Either Expect (o, [i])
 type Printer i o =  o  -> Either Expect [i]
 
 data Point i j o = Pickler
-  { _parser  :: Parser  i o
-  , _printer :: Printer i j
+  { _parser  :: [i] -> Either Expect (o, [i])
+  , _printer ::  j  -> Either Expect [i]
   , _label   :: Expect
   }
 
