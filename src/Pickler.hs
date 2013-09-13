@@ -87,9 +87,24 @@ label l a = Pickler p q l
         e _ _ = Left l
 
 -------------------------------------------------------------------------------
+
+for :: (j -> o) -> Pickler i o -> Point i j o
+for = (>-)
+
+fmap :: (b -> o) -> Point i j b -> Point i j o
+fmap = (<$>)
+
+app :: Point i j (b -> o) -> Point i j b -> Point i j o
+app = (<*>)
+
+alt :: Pickler i o -> Pickler i o -> Pickler i o
+alt = (<|>)
+
+-------------------------------------------------------------------------------
+
 -- Functor and Applicative.
 
-infix  5 -<
+infix  5 >-
 infixl 4 <$>
 infixl 4 <*>
 infixl 4 <*
@@ -106,11 +121,16 @@ infix  5 `prints`
             Right i
         w = _label a
 
-fmap :: (b -> o) -> Point i j b -> Point i j o
-fmap = (<$>)
+bimap :: (o -> o) -> ([i] -> [i]) -> Pickler i o -> Pickler i o
+bimap f g a = Pickler p q w
+  where p = parseAnd a $ \o ->
+            Right . (,) (f o)
+        q = printAnd a $ \i -> const $
+            Right (g i)
+        w = _label a
 
-(-<) :: (j -> o) -> Pickler i o -> Point i j o
-(-<) f (Pickler p q w) = Pickler p (q . f) w
+(>-) :: (j -> o) -> Pickler i o -> Point i j o
+(>-) f (Pickler p q w) = Pickler p (q . f) w
 
 pure :: o -> Pickler i o
 pure o = Pickler p q w
@@ -164,15 +184,15 @@ option d = (<|> pure d)
 many :: Eq o => Pickler i o -> Pickler i [o]
 many p = label (Many (_label p)) $
          cons `guards`
-           (:) <$> head -< p
-               <*> tail -< many p
+           (:) <$> head >- p
+               <*> tail >- many p
      <|> (nil `guards` pure [])
 
 some :: Eq o => Pickler i o -> Pickler i [o]
 some p = label (Some (_label p)) $
          cons `guards`
-           (:) <$> head -< p
-               <*> tail -< many p
+           (:) <$> head >- p
+               <*> tail >- many p
 
 cons :: [a] -> Bool
 cons [] = False
@@ -231,12 +251,12 @@ prefix t p = tokenI t `prints` [t] *> p
 prefixI :: Text -> Pickler Text o -> Pickler Text o
 prefixI t p = tokenI t `prints` [t] *> p
 
-object
+named
   :: Text
   -> Pickler i b
   -> Pickler i (Object o)
   -> Pickler i (Object (b, o))
-object key a b =
-  set key <$> get key -< a
-          <*> cast    -< b
+named key a b =
+  set key <$> get key >- a
+          <*> cast    >- b
 
