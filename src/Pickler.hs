@@ -127,12 +127,12 @@ infix  5 `prints`
             Right i
         w = _label a
 
-bimap :: (o -> o) -> ([i] -> [i]) -> Pickler i o -> Pickler i o
+bimap :: (o -> p) -> (p -> o) -> Pickler i o -> Pickler i p
 bimap f g a = Pickler p q w
   where p = parseAnd a $ \o ->
             Right . (,) (f o)
-        q = printAnd a $ \i -> const $
-            Right (g i)
+        q = printAnd a ( \i -> const $
+            Right (i) ) . g
         w = _label a
 
 (>-) :: (j -> o) -> Pickler i o -> Point i j o
