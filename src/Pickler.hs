@@ -44,11 +44,17 @@ data Point i j o = Pickler
 
 type Pickler i o = Point i o o
 
-parser :: Pickler i o -> Parser i o
-parser = _parser
+parser :: Point i j o -> [i] -> (Expect -> t) -> (o -> t) -> t
+parser p i err ok =
+  case _parser p i of
+    Left e       -> err e
+    Right (r, _) -> ok  r
 
-printer :: Pickler i o -> Printer i o
-printer = _printer
+printer :: Point i j o -> j -> (Expect -> t) -> ([i] -> t) -> t
+printer p o err ok =
+  case _printer p o of
+    Left e  -> err e
+    Right r -> ok r
 
 -------------------------------------------------------------------------------
 -- Helper functions to simplify writing pickler compositions.
@@ -140,7 +146,7 @@ pure o = Pickler p q w
 
 prints :: Pickler i o -> [i] -> Point i j o
 prints a i = Pickler p q w
-  where p = parser a
+  where p = _parser a
         q = const (Right i)
         w = Prim "prints"
 
@@ -171,8 +177,8 @@ p *> q = flip const <$> p <*> q
         w = _label a `Or` _label b
 
 guards :: (o -> Bool) -> Pickler i o -> Pickler i o
-guards g a = Pickler (parser a) q (_label a)
-  where q i | g i = printer a i
+guards g a = Pickler (_parser a) q (_label a)
+  where q i | g i = _printer a i
         q _       = Left (_label a)
 
 msum :: [Pickler i o] -> Pickler i o
