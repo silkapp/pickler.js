@@ -2,7 +2,7 @@
 module Pickler.Object where
 
 import Fay.Text
-import FFI (ffi)
+import FFI (ffi, Automatic)
 
 infixr :*:
 type (:*:) a b = (a, b)
@@ -12,11 +12,11 @@ data Object a
 emptyObj :: Object ()
 emptyObj = ffi "{}"
 
-get :: Text -> Object (a, o) -> a
+get :: Text -> Object (a, o) -> Automatic a
 get = ffi "%2[%1]"
 
-set :: Text -> a -> Object o -> Object (a, o)
-set = ffi "(%3[%1] = %2, %3)"
+set :: Text -> Automatic a -> Object o -> Object (a, o)
+set = ffi "(function (k, v, i)\n { var o = {};\n for (var p in i) o[p] = i[p];\n o[k] = v;\n return o; })\n(%1, %2, %3)"
 
 cast :: Object (a, o) -> Object o
 cast = ffi "%1"
