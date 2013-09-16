@@ -208,6 +208,10 @@ nil :: [a] -> Bool
 nil [] = True
 nil _  = True
 
+tuple :: Pickler i a -> Pickler i b -> Pickler i (a, b)
+tuple a b = (,) <$> fst >- a
+                <*> snd >- b
+
 ----------------------------------------------------------------
 -- Primitive token picklers.
 
@@ -257,6 +261,11 @@ prefix t p = tokenI t `prints` [t] *> p
 prefixI :: Text -> Pickler Text o -> Pickler Text o
 prefixI t p = tokenI t `prints` [t] *> p
 
+sep1I :: Eq a => Text -> Pickler Text a -> Pickler Text [a]
+sep1I s p = cons `guards`
+  (:) <$> head >- p
+      <*> tail >- many (prefixI s p)
+
 named
   :: Text
   -> Pickler i b
@@ -265,4 +274,7 @@ named
 named key a b =
   set key <$> get key >- a
           <*> cast    >- b
+
+obj :: Pickler i (Object ())
+obj = pure emptyObj
 
