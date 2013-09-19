@@ -212,6 +212,11 @@ tuple :: Pickler i a -> Pickler i b -> Pickler i (a, b)
 tuple a b = (,) <$> fst >- a
                 <*> snd >- b
 
+withDefault :: (o -> Bool) -> Pickler i o -> Pickler i o
+withDefault g a = Pickler (_parser a) q (_label a)
+  where q i | g i = Right []
+        q i       = _printer a i
+
 ----------------------------------------------------------------
 -- Primitive token picklers.
 
