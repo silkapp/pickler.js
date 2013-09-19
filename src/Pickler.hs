@@ -23,15 +23,15 @@ data Expect
   | Some Expect
 
 showError :: Expect -> Text
-showError = join "\n" . go
+showError = join " " . go
   where
     go e = case e of
              Prim  t -> [t]
-             And a b -> indent (go a) ++ ["and"] ++ indent (go b)
-             Or  a b -> indent (go a) ++ ["or" ] ++ indent (go b)
-             Many  a -> "many of" : indent (go a)
-             Some  a -> "some of" : indent (go a)
-    indent = map ("  " <>)
+             And a b -> paren ( go a ++ ["and"] ++ go b )
+             Or  a b -> paren ( go a ++ ["or" ] ++ go b )
+             Many  a -> paren ( ["many of"] ++ go a )
+             Some  a -> paren ( ["some of"] ++ go a )
+    paren x = ["("] ++ x ++ [")"]
 
 type Parser  i o = [i] -> Either Expect (o, [i])
 type Printer i o =  o  -> Either Expect [i]
