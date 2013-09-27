@@ -276,7 +276,7 @@ named
   -> Pickler i b
   -> Pickler i (Object o)
   -> Pickler i (Object (b, o))
-named key a b =
+named key a b = has key `guards`
   set key <$> get key >- a
           <*> cast    >- b
 
