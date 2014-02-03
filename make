@@ -15,7 +15,7 @@ build="fay \
 
 crypt="java -jar \
    $SILK/code/dev/closure/compiler.jar \
-   --compilation_level=ADVANCED_OPTIMIZATIONS \
+   --compilation_level=SIMPLE_OPTIMIZATIONS \
    --externs=dist/externs.js \
    $plain"
 
