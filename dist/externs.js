@@ -1,1 +1,2 @@
+var Strict;
 var Pickler;
