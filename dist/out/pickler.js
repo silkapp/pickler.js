@@ -148,14 +148,14 @@ function Fay$$fayToJs(type,fayObj){
   if(base == "action") {
     // A nullary monadic action. Should become a nullary JS function.
     // Fay () -> function(){ return ... }
-    jsObj = function(){
+    return function(){
       return Fay$$fayToJs(args[0],Fay$$_(fayObj,true).value);
     };
 
   }
   else if(base == "function") {
     // A proper function.
-    jsObj = function(){
+    return function(){
       var fayFunc = fayObj;
       var return_type = args[args.length-1];
       var len = args.length;
@@ -196,7 +196,7 @@ function Fay$$fayToJs(type,fayObj){
 
   }
   else if(base == "string") {
-    jsObj = Fay$$fayToJs_string(fayObj);
+    return Fay$$fayToJs_string(fayObj);
   }
   else if(base == "list") {
     // Serialize Fay list to JavaScript array.
@@ -206,7 +206,7 @@ function Fay$$fayToJs(type,fayObj){
       arr.push(Fay$$fayToJs(args[0],fayObj.car));
       fayObj = Fay$$_(fayObj.cdr);
     }
-    jsObj = arr;
+    return arr;
   }
   else if(base == "tuple") {
     // Serialize Fay tuple to JavaScript array.
@@ -217,56 +217,47 @@ function Fay$$fayToJs(type,fayObj){
       arr.push(Fay$$fayToJs(args[i++],fayObj.car));
       fayObj = Fay$$_(fayObj.cdr);
     }
-    jsObj = arr;
-
+    return arr;
   }
   else if(base == "defined") {
     fayObj = Fay$$_(fayObj);
-    if (fayObj instanceof Fay.FFI._Undefined) {
-      jsObj = undefined;
-    } else {
-      jsObj = Fay$$fayToJs(args[0],fayObj.slot1);
-    }
-
+    return fayObj instanceof Fay.FFI._Undefined
+      ? undefined
+      : Fay$$fayToJs(args[0],fayObj.slot1);
   }
   else if(base == "nullable") {
     fayObj = Fay$$_(fayObj);
-    if (fayObj instanceof Fay.FFI._Null) {
-      jsObj = null;
-    } else {
-      jsObj = Fay$$fayToJs(args[0],fayObj.slot1);
-    }
-
+    return fayObj instanceof Fay.FFI._Null
+      ? null
+      : Fay$$fayToJs(args[0],fayObj.slot1);
   }
   else if(base == "double" || base == "int" || base == "bool") {
     // Bools are unboxed.
-    jsObj = Fay$$_(fayObj);
-
+    return Fay$$_(fayObj);
   }
   else if(base == "ptr" || base == "unknown")
     return fayObj;
+  else if(base == "automatic" && fayObj instanceof Function) {
+    return Fay$$fayToJs(["function", "automatic_function"], fayObj);
+  }
   else if(base == "automatic" || base == "user") {
-
     fayObj = Fay$$_(fayObj);
 
-    if(fayObj instanceof Function) {
-      jsObj = Fay$$fayToJs(["function", "automatic_function"], fayObj);
-    } else if(fayObj instanceof Fay$$Cons || fayObj === null){
+    if(fayObj instanceof Fay$$Cons || fayObj === null){
       // Serialize Fay list to JavaScript array.
       var arr = [];
       while(fayObj instanceof Fay$$Cons) {
         arr.push(Fay$$fayToJs(["automatic"],fayObj.car));
         fayObj = Fay$$_(fayObj.cdr);
       }
-      jsObj = arr;
+      return arr;
     } else {
-      var fayToJsFun = fayObj && fayObj.constructor && Fay$$fayToJsHash[fayObj.constructor.name];
-      jsObj = fayToJsFun ? fayToJsFun(type,type[2],fayObj) : fayObj;
+      var fayToJsFun = fayObj && fayObj.instance && Fay$$fayToJsHash[fayObj.instance];
+      return fayToJsFun ? fayToJsFun(type,type[2],fayObj) : fayObj;
     }
   }
-  else
-    throw new Error("Unhandled Fay->JS translation type: " + base);
-  return jsObj;
+
+  throw new Error("Unhandled Fay->JS translation type: " + base);
 }
 
 // Stores the mappings from fay types to js objects.
@@ -304,7 +295,7 @@ function Fay$$jsToFay(type,jsObj){
   var fayObj;
   if(base == "action") {
     // Unserialize a "monadic" JavaScript return value into a monadic value.
-    fayObj = new Fay$$Monad(Fay$$jsToFay(args[0],jsObj));
+    return new Fay$$Monad(Fay$$jsToFay(args[0],jsObj));
   }
   else if(base == "function") {
     // Unserialize a function from JavaScript to a function that Fay can call.
@@ -340,19 +331,18 @@ function Fay$$jsToFay(type,jsObj){
           }
         };
       };
-      fayObj = makePartial([]);
+      return makePartial([]);
     }
-    else {
-      fayObj =
-        function (arg)
-        {
-           return Fay$$jsToFay(["automatic"], jsObj(Fay$$fayToJs(["automatic"], arg)));
-        };
-    }
+    else
+      return function (arg) {
+        return Fay$$jsToFay(["automatic"], jsObj(Fay$$fayToJs(["automatic"], arg)));
+      };
   }
   else if(base == "string") {
     // Unserialize a JS string into Fay list (String).
-    fayObj = Fay$$list(jsObj);
+    // This is a special case, when String is explicit in the type signature,
+    // with `Automatic' a string would not be decoded.
+    return Fay$$list(jsObj);
   }
   else if(base == "list") {
     // Unserialize a JS array into a Fay list ([a]).
@@ -362,8 +352,7 @@ function Fay$$jsToFay(type,jsObj){
       serializedList.push(Fay$$jsToFay(args[0],jsObj[i]));
     }
     // Pop it all in a Fay list.
-    fayObj = Fay$$list(serializedList);
-
+    return Fay$$list(serializedList);
   }
   else if(base == "tuple") {
     // Unserialize a JS array into a Fay tuple ((a,b,c,...)).
@@ -373,24 +362,17 @@ function Fay$$jsToFay(type,jsObj){
       serializedTuple.push(Fay$$jsToFay(args[i],jsObj[i]));
     }
     // Pop it all in a Fay list.
-    fayObj = Fay$$list(serializedTuple);
-
+    return Fay$$list(serializedTuple);
   }
   else if(base == "defined") {
-    if (jsObj === undefined) {
-      fayObj = new Fay.FFI._Undefined();
-    } else {
-      fayObj = new Fay.FFI._Defined(Fay$$jsToFay(args[0],jsObj));
-    }
-
+    return jsObj === undefined
+      ? new Fay.FFI._Undefined()
+      : new Fay.FFI._Defined(Fay$$jsToFay(args[0],jsObj));
   }
   else if(base == "nullable") {
-    if (jsObj === null) {
-      fayObj = new Fay.FFI._Null();
-    } else {
-      fayObj = new Fay.FFI.Nullable(Fay$$jsToFay(args[0],jsObj));
-    }
-
+    return jsObj === null
+      ? new Fay.FFI._Null()
+      : new Fay.FFI.Nullable(Fay$$jsToFay(args[0],jsObj));
   }
   else if(base == "int") {
     // Int are unboxed, so there's no forcing to do.
@@ -398,7 +380,7 @@ function Fay$$jsToFay(type,jsObj){
     // E.g. Math.round(x)!=x? throw "NOT AN INTEGER, GET OUT!"
     fayObj = Math.round(jsObj);
     if(fayObj!==jsObj) throw "Argument " + jsObj + " is not an integer!";
-
+    return fayObj;
   }
   else if (base == "double" ||
            base == "bool" ||
@@ -406,30 +388,29 @@ function Fay$$jsToFay(type,jsObj){
            base ==  "unknown") {
     return jsObj;
   }
+  else if(base == "automatic" && jsObj instanceof Function) {
+    var type = [["automatic"]];
+    for (var i = 0; i < jsObj.length; i++)
+      type.push(["automatic"]);
+    return Fay$$jsToFay(["function", type], jsObj);
+  }
+  else if(base == "automatic" && jsObj instanceof Array) {
+    var list = null;
+    for (var i = jsObj.length - 1; i >= 0; i--) {
+      list = new Fay$$Cons(Fay$$jsToFay([base], jsObj[i]), list);
+    }
+    return list;
+  }
   else if(base == "automatic" || base == "user") {
     if (jsObj && jsObj['instance']) {
       var jsToFayFun = Fay$$jsToFayHash[jsObj["instance"]];
-      fayObj = jsToFayFun ? jsToFayFun(type,type[2],jsObj) : jsObj;
-    }
-    else if (jsObj instanceof Array) {
-      var list = null;
-      for (var i = jsObj.length - 1; i >= 0; i--) {
-        list = new Fay$$Cons(Fay$$jsToFay([base], jsObj[i]), list);
-      }
-      fayObj = list;
-    }
-    else if (jsObj instanceof Function) {
-      var type = [["automatic"]];
-      for (var i = 0; i < jsObj.length; i++)
-        type.push(["automatic"]);
-      return Fay$$jsToFay(["function", type], jsObj);
+      return jsToFayFun ? jsToFayFun(type,type[2],jsObj) : jsObj;
     }
     else
-      fayObj = jsObj;
-
+      return jsObj;
   }
-  else { throw new Error("Unhandled JS->Fay translation type: " + base); }
-  return fayObj;
+
+  throw new Error("Unhandled JS->Fay translation type: " + base);
 }
 
 // Stores the mappings from js objects to fay types.
@@ -582,10 +563,9 @@ function Fay$$equal(lit1, lit2) {
         return lit1 === lit2;
     } while (true);
   } else if (typeof lit1 == 'object' && typeof lit2 == 'object' && lit1 && lit2 &&
-             lit1.constructor === lit2.constructor) {
+             lit1.instance === lit2.instance) {
     for(var x in lit1) {
-      if(!(lit1.hasOwnProperty(x) && lit2.hasOwnProperty(x) &&
-           Fay$$equal(lit1[x],lit2[x])))
+      if(!Fay$$equal(lit1[x],lit2[x]))
         return false;
     }
     return true;
@@ -769,11 +749,14 @@ function Fay$$date(str){
  * Application code.
  */
 
+var Data = {};
+Data.Data = {};
 var Fay = {};
 Fay.FFI = {};
 Fay.FFI._Nullable = function Nullable(slot1){
   this.slot1 = slot1;
 };
+Fay.FFI._Nullable.prototype.instance = "Nullable";
 Fay.FFI.Nullable = function(slot1){
   return new Fay$$$(function(){
     return new Fay.FFI._Nullable(slot1);
@@ -781,12 +764,14 @@ Fay.FFI.Nullable = function(slot1){
 };
 Fay.FFI._Null = function Null(){
 };
+Fay.FFI._Null.prototype.instance = "Null";
 Fay.FFI.Null = new Fay$$$(function(){
   return new Fay.FFI._Null();
 });
 Fay.FFI._Defined = function Defined(slot1){
   this.slot1 = slot1;
 };
+Fay.FFI._Defined.prototype.instance = "Defined";
 Fay.FFI.Defined = function(slot1){
   return new Fay$$$(function(){
     return new Fay.FFI._Defined(slot1);
@@ -794,6 +779,7 @@ Fay.FFI.Defined = function(slot1){
 };
 Fay.FFI._Undefined = function Undefined(){
 };
+Fay.FFI._Undefined.prototype.instance = "Undefined";
 Fay.FFI.Undefined = new Fay$$$(function(){
   return new Fay.FFI._Undefined();
 });
@@ -827,12 +813,11 @@ Fay$$objConcat(Fay$$jsToFayHash,{"Nullable": function(type,argTypes,obj){
 },"Undefined": function(type,argTypes,obj){
   return new Fay.FFI._Undefined();
 }});
-var Data = {};
-Data.Data = {};
 var Prelude = {};
 Prelude._Just = function Just(slot1){
   this.slot1 = slot1;
 };
+Prelude._Just.prototype.instance = "Just";
 Prelude.Just = function(slot1){
   return new Fay$$$(function(){
     return new Prelude._Just(slot1);
@@ -840,12 +825,14 @@ Prelude.Just = function(slot1){
 };
 Prelude._Nothing = function Nothing(){
 };
+Prelude._Nothing.prototype.instance = "Nothing";
 Prelude.Nothing = new Fay$$$(function(){
   return new Prelude._Nothing();
 });
 Prelude._Left = function Left(slot1){
   this.slot1 = slot1;
 };
+Prelude._Left.prototype.instance = "Left";
 Prelude.Left = function(slot1){
   return new Fay$$$(function(){
     return new Prelude._Left(slot1);
@@ -854,6 +841,7 @@ Prelude.Left = function(slot1){
 Prelude._Right = function Right(slot1){
   this.slot1 = slot1;
 };
+Prelude._Right.prototype.instance = "Right";
 Prelude.Right = function(slot1){
   return new Fay$$$(function(){
     return new Prelude._Right(slot1);
@@ -880,14 +868,14 @@ Prelude.maybe = function($p1){
 Prelude.$62$$62$$61$ = function($p1){
   return function($p2){
     return new Fay$$$(function(){
-      return new Fay$$Monad(Fay$$jsToFay(["unknown"],Fay$$bind(Fay$$fayToJs(["action",[["unknown"]]],$p1))(Fay$$fayToJs(["function",[["unknown"],["action",[["unknown"]]]]],$p2))));
+      return Fay$$_(Fay$$bind($p1)($p2));
     });
   };
 };
 Prelude.$62$$62$ = function($p1){
   return function($p2){
     return new Fay$$$(function(){
-      return new Fay$$Monad(Fay$$jsToFay(["unknown"],Fay$$then(Fay$$fayToJs(["action",[["unknown"]]],$p1))(Fay$$fayToJs(["action",[["unknown"]]],$p2))));
+      return Fay$$_(Fay$$then($p1)($p2));
     });
   };
 };
@@ -896,12 +884,33 @@ Prelude.$_return = function($p1){
     return new Fay$$Monad(Fay$$jsToFay(["unknown"],Fay$$return(Fay$$fayToJs(["unknown"],$p1))));
   });
 };
+Prelude.fail = new Fay$$$(function(){
+  return Prelude.error;
+});
 Prelude.when = function($p1){
   return function($p2){
     return new Fay$$$(function(){
       var m = $p2;
       var p = $p1;
       return Fay$$_(p) ? Fay$$_(Fay$$_(Fay$$then)(m))(Fay$$_(Fay$$$_return)(Fay$$unit)) : Fay$$_(Fay$$$_return)(Fay$$unit);
+    });
+  };
+};
+Prelude.unless = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      var m = $p2;
+      var p = $p1;
+      return Fay$$_(p) ? Fay$$_(Fay$$$_return)(Fay$$unit) : Fay$$_(Fay$$_(Fay$$then)(m))(Fay$$_(Fay$$$_return)(Fay$$unit));
+    });
+  };
+};
+Prelude.forM = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      var fn = $p2;
+      var lst = $p1;
+      return Fay$$_(Fay$$_(Prelude.$36$)(Prelude.sequence))(Fay$$_(Fay$$_(Prelude.map)(fn))(lst));
     });
   };
 };
@@ -919,6 +928,15 @@ Prelude.forM_ = function($p1){
         return Fay$$_(Fay$$$_return)(Fay$$unit);
       }
       throw ["unhandled case in forM_",[$p1,$p2]];
+    });
+  };
+};
+Prelude.mapM = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      var lst = $p2;
+      var fn = $p1;
+      return Fay$$_(Fay$$_(Prelude.$36$)(Prelude.sequence))(Fay$$_(Fay$$_(Prelude.map)(fn))(lst));
     });
   };
 };
@@ -946,6 +964,36 @@ Prelude.$61$$60$$60$ = function($p1){
       var f = $p1;
       return Fay$$_(Fay$$_(Fay$$bind)(x))(f);
     });
+  };
+};
+Prelude.$_void = function($p1){
+  return new Fay$$$(function(){
+    var f = $p1;
+    return Fay$$_(Fay$$_(Fay$$then)(f))(Fay$$_(Fay$$$_return)(Fay$$unit));
+  });
+};
+Prelude.$62$$61$$62$ = function($p1){
+  return function($p2){
+    return function($p3){
+      return new Fay$$$(function(){
+        var x = $p3;
+        var g = $p2;
+        var f = $p1;
+        return Fay$$_(Fay$$_(Fay$$bind)(Fay$$_(f)(x)))(g);
+      });
+    };
+  };
+};
+Prelude.$60$$61$$60$ = function($p1){
+  return function($p2){
+    return function($p3){
+      return new Fay$$$(function(){
+        var x = $p3;
+        var f = $p2;
+        var g = $p1;
+        return Fay$$_(Fay$$_(Fay$$bind)(Fay$$_(f)(x)))(g);
+      });
+    };
   };
 };
 Prelude.sequence = function($p1){
@@ -987,16 +1035,19 @@ Prelude.sequence_ = function($p1){
 };
 Prelude._GT = function GT(){
 };
+Prelude._GT.prototype.instance = "GT";
 Prelude.GT = new Fay$$$(function(){
   return new Prelude._GT();
 });
 Prelude._LT = function LT(){
 };
+Prelude._LT.prototype.instance = "LT";
 Prelude.LT = new Fay$$$(function(){
   return new Prelude._LT();
 });
 Prelude._EQ = function EQ(){
 };
+Prelude._EQ.prototype.instance = "EQ";
 Prelude.EQ = new Fay$$$(function(){
   return new Prelude._EQ();
 });
@@ -1094,12 +1145,12 @@ Prelude.enumFromThenTo = function($p1){
 };
 Prelude.fromIntegral = function($p1){
   return new Fay$$$(function(){
-    return Fay$$jsToFay_double(Fay$$fayToJs_int($p1));
+    return $p1;
   });
 };
 Prelude.fromInteger = function($p1){
   return new Fay$$$(function(){
-    return Fay$$jsToFay_double(Fay$$fayToJs_int($p1));
+    return $p1;
   });
 };
 Prelude.not = function($p1){
@@ -2326,6 +2377,8 @@ Prelude.lines = function($p1){
           if (Fay$$_(Fay$$index(1,Fay$$_($tmp1))) === null) {
             return Fay$$list([a]);
           }
+        }
+        if (Fay$$listLen(Fay$$_($tmp1),2)) {
           var a = Fay$$index(0,Fay$$_($tmp1));
           var $tmp2 = Fay$$_(Fay$$index(1,Fay$$_($tmp1)));
           if ($tmp2 instanceof Fay$$Cons) {
@@ -2683,6 +2736,18 @@ Prelude.putStrLn = function($p1){
     return new Fay$$Monad(Fay$$jsToFay(["unknown"],(function(x) { if (console && console.log) console.log(x) })(Fay$$fayToJs_string($p1))));
   });
 };
+Prelude.ifThenElse = function($p1){
+  return function($p2){
+    return function($p3){
+      return new Fay$$$(function(){
+        var b = $p3;
+        var a = $p2;
+        var p = $p1;
+        return Fay$$_(p) ? a : b;
+      });
+    };
+  };
+};
 Fay$$objConcat(Fay$$fayToJsHash,{"Just": function(type,argTypes,_obj){
   var obj_ = {"instance": "Just"};
   var obj_slot1 = Fay$$fayToJs(argTypes && (argTypes)[0] ? (argTypes)[0] : (type)[0] === "automatic" ? ["automatic"] : ["unknown"],_obj.slot1);
@@ -2734,31 +2799,154 @@ Fay$$objConcat(Fay$$jsToFayHash,{"Just": function(type,argTypes,obj){
 }});
 var FFI = {};
 Fay.Text = {};
-Fay.Text._Text = function Text(){
-};
-Fay.Text.Text = new Fay$$$(function(){
-  return new Fay.Text._Text();
-});
-Fay.Text.pack = function($p1){
+Fay.Text.Type = {};
+Fay.Text.Type.pack = function($p1){
   return new Fay$$$(function(){
     return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs_string($p1));
   });
 };
-Fay.Text.unpack = function($p1){
+Fay.Text.Type.unpack = function($p1){
   return new Fay$$$(function(){
     return Fay$$jsToFay_string(Fay$$fayToJs(["user","Text",[]],$p1));
   });
 };
-Fay.Text.fromString = new Fay$$$(function(){
-  return Fay.Text.pack;
+Fay.Text.Type.fromString = new Fay$$$(function(){
+  return Fay.Text.Type.pack;
 });
-Fay$$objConcat(Fay$$fayToJsHash,{"Text": function(type,argTypes,_obj){
-  var obj_ = {"instance": "Text"};
-  return obj_;
-}});
-Fay$$objConcat(Fay$$jsToFayHash,{"Text": function(type,argTypes,obj){
-  return new Fay.Text._Text();
-}});
+Fay.Text.empty = new Fay$$$(function(){
+  return Fay$$jsToFay(["user","Text",[]],'');
+});
+Fay.Text.cons = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Char",[]],$p1) + Fay$$fayToJs(["user","Text",[]],$p2));
+    });
+  };
+};
+Fay.Text.snoc = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Text",[]],$p1) + Fay$$fayToJs(["user","Char",[]],$p2));
+    });
+  };
+};
+Fay.Text.append = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Text",[]],$p1) + Fay$$fayToJs(["user","Text",[]],$p2));
+    });
+  };
+};
+Fay.Text.uncons = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Maybe",[["tuple",[["user","Char",[]],["user","Text",[]]]]]],Fay$$fayToJs(["user","Text",[]],$p1)[0] ? { instance: 'Just', slot1 : [Fay$$fayToJs(["user","Text",[]],$p1)[0],Fay$$fayToJs(["user","Text",[]],$p1).slice(1)] } : { instance : 'Nothing' });
+  });
+};
+Fay.Text.head = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Char",[]],Fay$$fayToJs(["user","Text",[]],$p1)[0] || (function () {throw new Error('Fay.Text.head: empty Text'); }()));
+  });
+};
+Fay.Text.last = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Char",[]],Fay$$fayToJs(["user","Text",[]],$p1).length ? Fay$$fayToJs(["user","Text",[]],$p1)[Fay$$fayToJs(["user","Text",[]],$p1).length-1] : (function() { throw new Error('Fay.Text.last: empty Text') })());
+  });
+};
+Fay.Text.tail = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Text",[]],$p1).length ? Fay$$fayToJs(["user","Text",[]],$p1).slice(1) : (function () { throw new Error('Fay.Text.tail: empty Text') })());
+  });
+};
+Fay.Text.init = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Text",[]],$p1).length ? Fay$$fayToJs(["user","Text",[]],$p1).slice(0,-1) : (function () { throw new Error('Fay.Text.init: empty Text') })());
+  });
+};
+Fay.Text.$_null = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay_bool(!(Fay$$fayToJs(["user","Text",[]],$p1).length));
+  });
+};
+Fay.Text.length = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay_int(Fay$$fayToJs(["user","Text",[]],$p1).length);
+  });
+};
+Fay.Text.map = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay(["user","Text",[]],[].map.call(Fay$$fayToJs(["user","Text",[]],$p2), Fay$$fayToJs(["function",[["user","Char",[]],["user","Char",[]]]],$p1)).join(''));
+    });
+  };
+};
+Fay.Text.intercalate = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["list",[["user","Text",[]]]],$p2).join(Fay$$fayToJs(["user","Text",[]],$p1)));
+    });
+  };
+};
+Fay.Text.intersperse = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Text",[]],$p2).split('').join(Fay$$fayToJs(["user","Char",[]],$p1)));
+    });
+  };
+};
+Fay.Text.reverse = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Text",[]],$p1).split('').reverse().join(''));
+  });
+};
+Fay.Text.toLower = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Text",[]],$p1).toLowerCase());
+  });
+};
+Fay.Text.toUpper = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["user","Text",[]],$p1).toUpperCase());
+  });
+};
+Fay.Text.concat = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Text",[]],Fay$$fayToJs(["list",[["user","Text",[]]]],$p1).join(''));
+  });
+};
+Fay.Text.concatMap = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay(["user","Text",[]],[].map.call(Fay$$fayToJs(["user","Text",[]],$p2), Fay$$fayToJs(["function",[["user","Char",[]],["user","Text",[]]]],$p1)).join(''));
+    });
+  };
+};
+Fay.Text.any = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay_bool([].filter.call(Fay$$fayToJs(["user","Text",[]],$p2), Fay$$fayToJs(["function",[["user","Char",[]],["bool"]]],$p1)).length > 0);
+    });
+  };
+};
+Fay.Text.all = function($p1){
+  return function($p2){
+    return new Fay$$$(function(){
+      return Fay$$jsToFay_bool([].filter.call(Fay$$fayToJs(["user","Text",[]],$p2), Fay$$fayToJs(["function",[["user","Char",[]],["bool"]]],$p1)).length == Fay$$fayToJs(["function",[["user","Char",[]],["bool"]]],$p1).length);
+    });
+  };
+};
+Fay.Text.maximum = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Char",[]],(function (s) {    if (s === '') { throw new Error('Fay.Text.maximum: empty string'); }    var max = s[0];    for (var i = 1; i < s.length; s++) {      if (s[i] > max) { max = s[i]; }    }    return max;  })(Fay$$fayToJs(["user","Text",[]],$p1)));
+  });
+};
+Fay.Text.minimum = function($p1){
+  return new Fay$$$(function(){
+    return Fay$$jsToFay(["user","Char",[]],(function (s) {    if (s === '') { throw new Error('Fay.Text.maximum: empty string'); }    var min = s[0];    for (var i = 1; i < s.length; s++) {      if (s[i] < min) { min = s[i]; }    }    return min;  })(Fay$$fayToJs(["user","Text",[]],$p1)));
+  });
+};
+Fay.Text.fromString = Fay.Text.Type.fromString;
+Fay.Text.pack = Fay.Text.Type.pack;
+Fay.Text.unpack = Fay.Text.Type.unpack;
 var Pickler = {};
 Pickler.Text = {};
 Pickler.Text.lower = function($p1){
@@ -2834,6 +3022,7 @@ Strict.Pickler = {};
 Pickler._Prim = function Prim(slot1){
   this.slot1 = slot1;
 };
+Pickler._Prim.prototype.instance = "Prim";
 Pickler.Prim = function(slot1){
   return new Fay$$$(function(){
     return new Pickler._Prim(slot1);
@@ -2843,6 +3032,7 @@ Pickler._And = function And(slot1,slot2){
   this.slot1 = slot1;
   this.slot2 = slot2;
 };
+Pickler._And.prototype.instance = "And";
 Pickler.And = function(slot1){
   return function(slot2){
     return new Fay$$$(function(){
@@ -2854,6 +3044,7 @@ Pickler._Or = function Or(slot1,slot2){
   this.slot1 = slot1;
   this.slot2 = slot2;
 };
+Pickler._Or.prototype.instance = "Or";
 Pickler.Or = function(slot1){
   return function(slot2){
     return new Fay$$$(function(){
@@ -2864,6 +3055,7 @@ Pickler.Or = function(slot1){
 Pickler._Many = function Many(slot1){
   this.slot1 = slot1;
 };
+Pickler._Many.prototype.instance = "Many";
 Pickler.Many = function(slot1){
   return new Fay$$$(function(){
     return new Pickler._Many(slot1);
@@ -2872,6 +3064,7 @@ Pickler.Many = function(slot1){
 Pickler._Some = function Some(slot1){
   this.slot1 = slot1;
 };
+Pickler._Some.prototype.instance = "Some";
 Pickler.Some = function(slot1){
   return new Fay$$$(function(){
     return new Pickler._Some(slot1);
@@ -2923,6 +3116,7 @@ Pickler._Pickler = function Pickler(_parser,_printer,_label){
   this._printer = _printer;
   this._label = _label;
 };
+Pickler._Pickler.prototype.instance = "Pickler";
 Pickler.Pickler = function(_parser){
   return function(_printer){
     return function(_label){
@@ -3136,10 +3330,10 @@ Pickler.$60$$36$$62$ = function($p1){
           return Fay$$_(Fay$$_(Prelude.$36$)(Fay$$_(Pickler.parseAnd)(a)))(function($p1){
             var o = $p1;
             return Fay$$_(Fay$$_(Prelude.$46$)(Prelude.Right))(Fay$$_(function($p1){
-              var $gen_1 = $p1;
+              var $gen_0 = $p1;
               return function($p2){
-                var $gen_2 = $p2;
-                return Fay$$list([$gen_1,$gen_2]);
+                var $gen_1 = $p2;
+                return Fay$$list([$gen_0,$gen_1]);
               };
             })(Fay$$_(f)(o)));
           });
@@ -3170,10 +3364,10 @@ Pickler.bimap = function($p1){
             return Fay$$_(Fay$$_(Prelude.$36$)(Fay$$_(Pickler.parseAnd)(a)))(function($p1){
               var o = $p1;
               return Fay$$_(Fay$$_(Prelude.$46$)(Prelude.Right))(Fay$$_(function($p1){
-                var $gen_1 = $p1;
+                var $gen_0 = $p1;
                 return function($p2){
-                  var $gen_2 = $p2;
-                  return Fay$$list([$gen_1,$gen_2]);
+                  var $gen_1 = $p2;
+                  return Fay$$list([$gen_0,$gen_1]);
                 };
               })(Fay$$_(f)(o)));
             });
@@ -3213,10 +3407,10 @@ Pickler.pure = function($p1){
     return (function(){
       var p = new Fay$$$(function(){
         return Fay$$_(Fay$$_(Prelude.$46$)(Prelude.Right))(Fay$$_(function($p1){
-          var $gen_1 = $p1;
+          var $gen_0 = $p1;
           return function($p2){
-            var $gen_2 = $p2;
-            return Fay$$list([$gen_1,$gen_2]);
+            var $gen_1 = $p2;
+            return Fay$$list([$gen_0,$gen_1]);
           };
         })(o));
       });
@@ -3262,10 +3456,10 @@ Pickler.$60$$42$$62$ = function($p1){
             return Fay$$_(Fay$$_(Prelude.$36$)(Fay$$_(Pickler.parseAnd)(b)))(function($p1){
               var o = $p1;
               return Fay$$_(Fay$$_(Prelude.$46$)(Prelude.Right))(Fay$$_(function($p1){
-                var $gen_1 = $p1;
+                var $gen_0 = $p1;
                 return function($p2){
-                  var $gen_2 = $p2;
-                  return Fay$$list([$gen_1,$gen_2]);
+                  var $gen_1 = $p2;
+                  return Fay$$list([$gen_0,$gen_1]);
                 };
               })(Fay$$_(f)(o)));
             });
@@ -3404,10 +3598,10 @@ Pickler.tuple = function($p1){
       var b = $p2;
       var a = $p1;
       return Fay$$_(Fay$$_(Pickler.$60$$42$$62$)(Fay$$_(Fay$$_(Pickler.$60$$36$$62$)(function($p1){
-        var $gen_1 = $p1;
+        var $gen_0 = $p1;
         return function($p2){
-          var $gen_2 = $p2;
-          return Fay$$list([$gen_1,$gen_2]);
+          var $gen_1 = $p2;
+          return Fay$$list([$gen_0,$gen_1]);
         };
       }))(Fay$$_(Fay$$_(Pickler.$62$$45$)(Prelude.fst))(a))))(Fay$$_(Fay$$_(Pickler.$62$$45$)(Prelude.snd))(b));
     });
@@ -3612,47 +3806,6 @@ Pickler.named = function($p1){
 Pickler.obj = new Fay$$$(function(){
   return Fay$$_(Pickler.pure)(Pickler.Object.emptyObj);
 });
-Strict.Pickler.alt = Fay$$fayToJs(['automatic'],Pickler.alt);
-Strict.Pickler.any = Fay$$fayToJs(['automatic'],Pickler.any);
-Strict.Pickler.app = Fay$$fayToJs(['automatic'],Pickler.app);
-Strict.Pickler.bimap = Fay$$fayToJs(['automatic'],Pickler.bimap);
-Strict.Pickler.cons = Fay$$fayToJs(['automatic'],Pickler.cons);
-Strict.Pickler.fmap = Fay$$fayToJs(['automatic'],Pickler.fmap);
-Strict.Pickler.$_for = Fay$$fayToJs(['automatic'],Pickler.$_for);
-Strict.Pickler.guards = Fay$$fayToJs(['automatic'],Pickler.guards);
-Strict.Pickler.$_label = Fay$$fayToJs(['automatic'],Pickler.$_label);
-Strict.Pickler.many = Fay$$fayToJs(['automatic'],Pickler.many);
-Strict.Pickler.msum = Fay$$fayToJs(['automatic'],Pickler.msum);
-Strict.Pickler.named = Fay$$fayToJs(['automatic'],Pickler.named);
-Strict.Pickler.nil = Fay$$fayToJs(['automatic'],Pickler.nil);
-Strict.Pickler.obj = Fay$$fayToJs(['automatic'],Pickler.obj);
-Strict.Pickler.oneOf = Fay$$fayToJs(['automatic'],Pickler.oneOf);
-Strict.Pickler.oneOfI = Fay$$fayToJs(['automatic'],Pickler.oneOfI);
-Strict.Pickler.option = Fay$$fayToJs(['automatic'],Pickler.option);
-Strict.Pickler.parseAnd = Fay$$fayToJs(['automatic'],Pickler.parseAnd);
-Strict.Pickler.parseOr = Fay$$fayToJs(['automatic'],Pickler.parseOr);
-Strict.Pickler.parser = Fay$$fayToJs(['automatic'],Pickler.parser);
-Strict.Pickler.prefix = Fay$$fayToJs(['automatic'],Pickler.prefix);
-Strict.Pickler.prefixI = Fay$$fayToJs(['automatic'],Pickler.prefixI);
-Strict.Pickler.printAnd = Fay$$fayToJs(['automatic'],Pickler.printAnd);
-Strict.Pickler.printOr = Fay$$fayToJs(['automatic'],Pickler.printOr);
-Strict.Pickler.printer = Fay$$fayToJs(['automatic'],Pickler.printer);
-Strict.Pickler.prints = Fay$$fayToJs(['automatic'],Pickler.prints);
-Strict.Pickler.pure = Fay$$fayToJs(['automatic'],Pickler.pure);
-Strict.Pickler.satisfy = Fay$$fayToJs(['automatic'],Pickler.satisfy);
-Strict.Pickler.sep1I = Fay$$fayToJs(['automatic'],Pickler.sep1I);
-Strict.Pickler.showError = Fay$$fayToJs(['automatic'],Pickler.showError);
-Strict.Pickler.some = Fay$$fayToJs(['automatic'],Pickler.some);
-Strict.Pickler.token = Fay$$fayToJs(['automatic'],Pickler.token);
-Strict.Pickler.tokenI = Fay$$fayToJs(['automatic'],Pickler.tokenI);
-Strict.Pickler.tuple = Fay$$fayToJs(['automatic'],Pickler.tuple);
-Strict.Pickler.withDefault = Fay$$fayToJs(['automatic'],Pickler.withDefault);
-Strict.Pickler.$42$$62$ = Fay$$fayToJs(['automatic'],Pickler.$42$$62$);
-Strict.Pickler.$60$$36$$62$ = Fay$$fayToJs(['automatic'],Pickler.$60$$36$$62$);
-Strict.Pickler.$60$$42$ = Fay$$fayToJs(['automatic'],Pickler.$60$$42$);
-Strict.Pickler.$60$$42$$62$ = Fay$$fayToJs(['automatic'],Pickler.$60$$42$$62$);
-Strict.Pickler.$60$$124$$62$ = Fay$$fayToJs(['automatic'],Pickler.$60$$124$$62$);
-Strict.Pickler.$62$$45$ = Fay$$fayToJs(['automatic'],Pickler.$62$$45$);
 Fay$$objConcat(Fay$$fayToJsHash,{"Prim": function(type,argTypes,_obj){
   var obj_ = {"instance": "Prim"};
   var obj_slot1 = Fay$$fayToJs(["user","Text",[]],_obj.slot1);
@@ -3725,4 +3878,45 @@ Fay$$objConcat(Fay$$jsToFayHash,{"Prim": function(type,argTypes,obj){
 },"Pickler": function(type,argTypes,obj){
   return new Pickler._Pickler(Fay$$jsToFay(["function",[["list",[argTypes && (argTypes)[0] ? (argTypes)[0] : (type)[0] === "automatic" ? ["automatic"] : ["unknown"]]],["user","Either",[["user","Expect",[]],["tuple",[argTypes && (argTypes)[1] ? (argTypes)[1] : (type)[0] === "automatic" ? ["automatic"] : ["unknown"],["list",[argTypes && (argTypes)[1] ? (argTypes)[1] : (type)[0] === "automatic" ? ["automatic"] : ["unknown"]]]]]]]]],obj["_parser"]),Fay$$jsToFay(["function",[argTypes && (argTypes)[0] ? (argTypes)[0] : (type)[0] === "automatic" ? ["automatic"] : ["unknown"],["user","Either",[["user","Expect",[]],["list",[argTypes && (argTypes)[1] ? (argTypes)[1] : (type)[0] === "automatic" ? ["automatic"] : ["unknown"]]]]]]],obj["_printer"]),Fay$$jsToFay(["user","Expect",[]],obj["_label"]));
 }});
+Strict.Pickler.alt = Fay$$fayToJs(['automatic'],Pickler.alt);
+Strict.Pickler.any = Fay$$fayToJs(['automatic'],Pickler.any);
+Strict.Pickler.app = Fay$$fayToJs(['automatic'],Pickler.app);
+Strict.Pickler.bimap = Fay$$fayToJs(['automatic'],Pickler.bimap);
+Strict.Pickler.cons = Fay$$fayToJs(['automatic'],Pickler.cons);
+Strict.Pickler.fmap = Fay$$fayToJs(['automatic'],Pickler.fmap);
+Strict.Pickler.$_for = Fay$$fayToJs(['automatic'],Pickler.$_for);
+Strict.Pickler.guards = Fay$$fayToJs(['automatic'],Pickler.guards);
+Strict.Pickler.$_label = Fay$$fayToJs(['automatic'],Pickler.$_label);
+Strict.Pickler.many = Fay$$fayToJs(['automatic'],Pickler.many);
+Strict.Pickler.msum = Fay$$fayToJs(['automatic'],Pickler.msum);
+Strict.Pickler.named = Fay$$fayToJs(['automatic'],Pickler.named);
+Strict.Pickler.nil = Fay$$fayToJs(['automatic'],Pickler.nil);
+Strict.Pickler.obj = Fay$$fayToJs(['automatic'],Pickler.obj);
+Strict.Pickler.oneOf = Fay$$fayToJs(['automatic'],Pickler.oneOf);
+Strict.Pickler.oneOfI = Fay$$fayToJs(['automatic'],Pickler.oneOfI);
+Strict.Pickler.option = Fay$$fayToJs(['automatic'],Pickler.option);
+Strict.Pickler.parseAnd = Fay$$fayToJs(['automatic'],Pickler.parseAnd);
+Strict.Pickler.parseOr = Fay$$fayToJs(['automatic'],Pickler.parseOr);
+Strict.Pickler.parser = Fay$$fayToJs(['automatic'],Pickler.parser);
+Strict.Pickler.prefix = Fay$$fayToJs(['automatic'],Pickler.prefix);
+Strict.Pickler.prefixI = Fay$$fayToJs(['automatic'],Pickler.prefixI);
+Strict.Pickler.printAnd = Fay$$fayToJs(['automatic'],Pickler.printAnd);
+Strict.Pickler.printOr = Fay$$fayToJs(['automatic'],Pickler.printOr);
+Strict.Pickler.printer = Fay$$fayToJs(['automatic'],Pickler.printer);
+Strict.Pickler.prints = Fay$$fayToJs(['automatic'],Pickler.prints);
+Strict.Pickler.pure = Fay$$fayToJs(['automatic'],Pickler.pure);
+Strict.Pickler.satisfy = Fay$$fayToJs(['automatic'],Pickler.satisfy);
+Strict.Pickler.sep1I = Fay$$fayToJs(['automatic'],Pickler.sep1I);
+Strict.Pickler.showError = Fay$$fayToJs(['automatic'],Pickler.showError);
+Strict.Pickler.some = Fay$$fayToJs(['automatic'],Pickler.some);
+Strict.Pickler.token = Fay$$fayToJs(['automatic'],Pickler.token);
+Strict.Pickler.tokenI = Fay$$fayToJs(['automatic'],Pickler.tokenI);
+Strict.Pickler.tuple = Fay$$fayToJs(['automatic'],Pickler.tuple);
+Strict.Pickler.withDefault = Fay$$fayToJs(['automatic'],Pickler.withDefault);
+Strict.Pickler.$42$$62$ = Fay$$fayToJs(['automatic'],Pickler.$42$$62$);
+Strict.Pickler.$60$$36$$62$ = Fay$$fayToJs(['automatic'],Pickler.$60$$36$$62$);
+Strict.Pickler.$60$$42$ = Fay$$fayToJs(['automatic'],Pickler.$60$$42$);
+Strict.Pickler.$60$$42$$62$ = Fay$$fayToJs(['automatic'],Pickler.$60$$42$$62$);
+Strict.Pickler.$60$$124$$62$ = Fay$$fayToJs(['automatic'],Pickler.$60$$124$$62$);
+Strict.Pickler.$62$$45$ = Fay$$fayToJs(['automatic'],Pickler.$62$$45$);
 
